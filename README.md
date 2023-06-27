@@ -1,8 +1,6 @@
 # Version Check Github Action
 
-**WIP**
-Checks if the version field in a given JSON file has been incremented compared to master. Principally
-for checking on PRs to be merged into master.
+Checks if the version field in a given package.json file has been changed compared to master. Useful for CI/CD pipelines where you want to only run a job if the version has changed.
 
 ## Usage:
 
@@ -21,7 +19,7 @@ jobs:
 
       - name: package-a changed in last commit?
         id: changedAction
-        uses: RockiRider/version-has-changed
+        uses: Octopus-moneycoach/version-has-changed@v1
         with:
           path: package.json # Root package.json file
           from: HEAD^1 # Check for changes since previous commit (feel free to put a branch name instead in the form of origin/<branchName>)

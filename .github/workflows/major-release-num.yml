@@ -1,0 +1,26 @@
+name: Move Major Release Tag
+
+on:
+    release:
+      types:
+        - published
+        - edited
+
+jobs:
+    update-tag:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v3
+            with:
+                fetch-depth: 0
+                token: ${{ secrets.GH_TOKEN }}
+          - name: Set up Git
+            run: |
+                git config user.name "GitHub Actions"
+                git config user.email "actions@github.com"
+          - name: Update v1 tag
+            run: |
+                git tag -d v1
+                git tag v1 ${{ github.event.release.tag_name }}
+                git push --tags --force

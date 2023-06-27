@@ -19,7 +19,7 @@ jobs:
 
       - name: package-a changed in last commit?
         id: changedAction
-        uses: Octopus-moneycoach/version-has-changed@v1
+        uses: Octopus-Moneycoach/version-has-changed@v1
         with:
           path: package.json # Root package.json file
           from: HEAD^1 # Check for changes since previous commit (feel free to put a branch name instead in the form of origin/<branchName>)

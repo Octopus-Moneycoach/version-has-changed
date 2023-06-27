@@ -1,5 +1,5 @@
 {
-  "name": "typescript-action",
+  "name": "has-version-changed",
   "version": "1.0.0",
   "private": true,
   "description": "TypeScript template action",
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/Octopus-Moneycoach/version-has-changed.git"
   },
   "author": "",
   "license": "MIT",

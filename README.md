@@ -1,4 +1,4 @@
-# Version Check Github Action
+# Has Version Changed Github Action
 
 Checks if the version field in a given package.json file has been changed compared to master. Useful for CI/CD pipelines where you want to only run a job if the version has changed.
 

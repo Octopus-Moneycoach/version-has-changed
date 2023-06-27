@@ -1,6 +1,6 @@
-name: 'Version Has Changed'
+name: 'Has Version Changed'
 description: 'Checks your Package.json file and sees if its changed. WIP'
-author: 'RockiRider'
+author: 'Octopus Money'
 inputs:
   from:
     required: true

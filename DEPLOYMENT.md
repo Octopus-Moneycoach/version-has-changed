@@ -1,13 +1,8 @@
 # How to deploy
+
+After you commit your changes run the following command:
 ```shell
-npm version patch
-npm run package
-git add dist
-git commit -a -m "prod dependencies"
-git push origin release/v1
+npm run deploy
 ```
 
-Open a terminal and navigate to your local repository.
-Run the command git tag -d v1 to delete the existing v1 tag.
-Run the command git tag v1 v1.0.5 to create a new v1 tag that points to the v1.0.5 commit.
-Run the command git push --tags --force to update the remote repository with the new v1 tag.
+Then go to Github and do a release and tag it with the same version as the package.json file.

@@ -82,7 +82,10 @@ function run() {
                         }
                     }
                 };
-                const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${path} | grep "^[~]"`;
+                // The `{ }` syntax surrounding grep allows us to ignore any grep return
+                // value of 1 as it simply means we found no relevant changes. Not that
+                //  an error occurred.
+                const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${path} | { grep "^[~]" || test $? = 1; }`;
                 yield exec.exec(`/bin/bash -c "${command}"`, [], secondOptions);
                 if (secondErrors.length > 0) {
                     (0, core_1.setFailed)(secondErrors);

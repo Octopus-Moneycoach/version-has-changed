@@ -23,5 +23,5 @@ jobs:
           - name: Update v2 tag
             run: |
                 git tag -d v2
-                git tag v1 ${{ github.event.release.tag_name }}
+                git tag v2 ${{ github.event.release.tag_name }}
                 git push --tags --force

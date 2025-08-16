@@ -17,5 +17,5 @@ outputs:
   changed:
     description: 'True if the package.json version changed, otherwise false.'
 runs:
-  using: 'node16'
+  using: 'node24'
   main: 'dist/index.js'

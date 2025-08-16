@@ -1,5 +1,6 @@
 import {getInput, setFailed, setOutput} from '@actions/core'
 import * as exec from '@actions/exec'
+import wcmatch from 'wildcard-match'
 
 const LOOKOUT_VALUE = `~  "version":`
 
@@ -7,10 +8,19 @@ async function run(): Promise<void> {
   try {
     const from = getInput('from', {required: true})
     const to = getInput('to', {required: true})
-    const path = getInput('path', {required: true})
+    const path = getInput('path', {required: false})
+    const match = getInput('match', {required: false})
 
-    if (!path.includes('package.json')) {
+    if (path && !path.includes('package.json')) {
       setFailed('path must include package.json')
+    }
+
+    if (match && !match.endsWith('package.json')) {
+      setFailed('match pattern must end with package.json')
+    }
+
+    if (!match && !path) {
+      setFailed('match or path must be provided')
     }
 
     let firstOutput = ''
@@ -34,8 +44,27 @@ async function run(): Promise<void> {
     if (firstErrors.length > 0) {
       setFailed(firstErrors)
     }
-    if (firstOutput.includes(path)) {
-      // If the file is in the diff, now we check if the version has changed
+
+    const changedFiles = firstOutput.split("\n").map(s => s.trim());
+    const matches = new Set<string>();
+    if (path && changedFiles.includes(path)) {
+      matches.add(path);
+    }
+
+    const isMatch = wcmatch(match);
+    for (const file of changedFiles) {
+      if (!match) {
+        break;
+      }
+
+      if (isMatch(file)) {
+        matches.add(file);
+      }
+    }
+
+    let changed = false, matchedChanges: string[] = [];
+    for (const matchedFile of matches) {
+       // If the file is in the diff, now we check if the version has changed
       let secondOuptut = ''
       let secondErrors = ''
 
@@ -53,21 +82,24 @@ async function run(): Promise<void> {
       // The `{ }` syntax surrounding grep allows us to ignore any grep return
       // value of 1 as it simply means we found no relevant changes. Not that
       //  an error occurred.
-      const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${path} | { grep "^[~]" || test $? = 1; }`
+      const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${matchedFile} | { grep "^[~]" || test $? = 1; }`
       await exec.exec(`/bin/bash -c "${command}"`, [], secondOptions)
 
       if (secondErrors.length > 0) {
         setFailed(secondErrors)
+        break;
       }
 
       if (secondOuptut.includes(LOOKOUT_VALUE)) {
-        setOutput('changed', 'true')
-      } else {
-        setOutput('changed', 'false')
+        changed = true;
+        // Remove package.json from match
+        matchedChanges.push(matchedFile.replace(/\/package\.json$/, ""));
       }
-    } else {
-      setOutput('changed', 'false')
     }
+
+    setOutput("changed", changed);
+    setOutput("matched", JSON.stringify(matchedChanges));
+
   } catch (error) {
     if (error instanceof Error) setFailed(error.message)
   }

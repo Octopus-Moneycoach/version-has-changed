@@ -48,18 +48,29 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core_1 = __nccwpck_require__(484);
 const exec = __importStar(__nccwpck_require__(236));
+const wildcard_match_1 = __importDefault(__nccwpck_require__(608));
 const LOOKOUT_VALUE = `~  "version":`;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const from = (0, core_1.getInput)('from', { required: true });
             const to = (0, core_1.getInput)('to', { required: true });
-            const path = (0, core_1.getInput)('path', { required: true });
-            if (!path.includes('package.json')) {
+            const path = (0, core_1.getInput)('path', { required: false });
+            const match = (0, core_1.getInput)('match', { required: false });
+            if (path && !path.includes('package.json')) {
                 (0, core_1.setFailed)('path must include package.json');
+            }
+            if (match && !match.endsWith('package.json')) {
+                (0, core_1.setFailed)('match pattern must end with package.json');
+            }
+            if (!match && !path) {
+                (0, core_1.setFailed)('match or path must be provided');
             }
             let firstOutput = '';
             let firstErrors = '';
@@ -78,7 +89,22 @@ function run() {
             if (firstErrors.length > 0) {
                 (0, core_1.setFailed)(firstErrors);
             }
-            if (firstOutput.includes(path)) {
+            const changedFiles = firstOutput.split("\n").map(s => s.trim());
+            const matches = new Set();
+            if (path && changedFiles.includes(path)) {
+                matches.add(path);
+            }
+            const isMatch = (0, wildcard_match_1.default)(match);
+            for (const file of changedFiles) {
+                if (!match) {
+                    break;
+                }
+                if (isMatch(file)) {
+                    matches.add(file);
+                }
+            }
+            let changed = false, matchedChanges = [];
+            for (const matchedFile of matches) {
                 // If the file is in the diff, now we check if the version has changed
                 let secondOuptut = '';
                 let secondErrors = '';
@@ -95,21 +121,20 @@ function run() {
                 // The `{ }` syntax surrounding grep allows us to ignore any grep return
                 // value of 1 as it simply means we found no relevant changes. Not that
                 //  an error occurred.
-                const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${path} | { grep "^[~]" || test $? = 1; }`;
+                const command = `git diff --unified=0 --no-prefix --color=never --output-indicator-new=~ ${from}..${to} -- ${matchedFile} | { grep "^[~]" || test $? = 1; }`;
                 yield exec.exec(`/bin/bash -c "${command}"`, [], secondOptions);
                 if (secondErrors.length > 0) {
                     (0, core_1.setFailed)(secondErrors);
+                    break;
                 }
                 if (secondOuptut.includes(LOOKOUT_VALUE)) {
-                    (0, core_1.setOutput)('changed', 'true');
-                }
-                else {
-                    (0, core_1.setOutput)('changed', 'false');
+                    changed = true;
+                    // Remove package.json from match
+                    matchedChanges.push(matchedFile.replace(/\/package\.json$/, ""));
                 }
             }
-            else {
-                (0, core_1.setOutput)('changed', 'false');
-            }
+            (0, core_1.setOutput)("changed", changed);
+            (0, core_1.setOutput)("matched", JSON.stringify(matchedChanges));
         }
         catch (error) {
             if (error instanceof Error)
@@ -3624,6 +3649,185 @@ module.exports = require("tls");
 
 "use strict";
 module.exports = require("util");
+
+/***/ }),
+
+/***/ 608:
+/***/ ((module) => {
+
+"use strict";
+
+
+/**
+ * Escapes a character if it has a special meaning in regular expressions
+ * and returns the character as is if it doesn't
+ */
+function escapeRegExpChar(char) {
+    if (char === '-' ||
+        char === '^' ||
+        char === '$' ||
+        char === '+' ||
+        char === '.' ||
+        char === '(' ||
+        char === ')' ||
+        char === '|' ||
+        char === '[' ||
+        char === ']' ||
+        char === '{' ||
+        char === '}' ||
+        char === '*' ||
+        char === '?' ||
+        char === '\\') {
+        return "\\".concat(char);
+    }
+    else {
+        return char;
+    }
+}
+/**
+ * Escapes all characters in a given string that have a special meaning in regular expressions
+ */
+function escapeRegExpString(str) {
+    var result = '';
+    for (var i = 0; i < str.length; i++) {
+        result += escapeRegExpChar(str[i]);
+    }
+    return result;
+}
+/**
+ * Transforms one or more glob patterns into a RegExp pattern
+ */
+function transform(pattern, separator) {
+    if (separator === void 0) { separator = true; }
+    if (Array.isArray(pattern)) {
+        var regExpPatterns = pattern.map(function (p) { return "^".concat(transform(p, separator), "$"); });
+        return "(?:".concat(regExpPatterns.join('|'), ")");
+    }
+    var separatorSplitter = '';
+    var separatorMatcher = '';
+    var wildcard = '.';
+    if (separator === true) {
+        separatorSplitter = '/';
+        separatorMatcher = '[/\\\\]';
+        wildcard = '[^/\\\\]';
+    }
+    else if (separator) {
+        separatorSplitter = separator;
+        separatorMatcher = escapeRegExpString(separatorSplitter);
+        if (separatorMatcher.length > 1) {
+            separatorMatcher = "(?:".concat(separatorMatcher, ")");
+            wildcard = "((?!".concat(separatorMatcher, ").)");
+        }
+        else {
+            wildcard = "[^".concat(separatorMatcher, "]");
+        }
+    }
+    var requiredSeparator = separator ? "".concat(separatorMatcher, "+?") : '';
+    var optionalSeparator = separator ? "".concat(separatorMatcher, "*?") : '';
+    var segments = separator ? pattern.split(separatorSplitter) : [pattern];
+    var result = '';
+    for (var s = 0; s < segments.length; s++) {
+        var segment = segments[s];
+        var nextSegment = segments[s + 1];
+        var currentSeparator = '';
+        if (!segment && s > 0) {
+            continue;
+        }
+        if (separator) {
+            if (s === segments.length - 1) {
+                currentSeparator = optionalSeparator;
+            }
+            else if (nextSegment !== '**') {
+                currentSeparator = requiredSeparator;
+            }
+            else {
+                currentSeparator = '';
+            }
+        }
+        if (separator && segment === '**') {
+            if (currentSeparator) {
+                result +=
+                    s === 0
+                        ? ''
+                        : s === segments.length - 1
+                            ? "(?:".concat(requiredSeparator, "|$)")
+                            : requiredSeparator;
+                result += "(?:".concat(wildcard, "*?").concat(currentSeparator, ")*?");
+            }
+            continue;
+        }
+        for (var c = 0; c < segment.length; c++) {
+            var char = segment[c];
+            if (char === '\\') {
+                if (c < segment.length - 1) {
+                    result += escapeRegExpChar(segment[c + 1]);
+                    c++;
+                }
+            }
+            else if (char === '?') {
+                result += wildcard;
+            }
+            else if (char === '*') {
+                result += "".concat(wildcard, "*?");
+            }
+            else {
+                result += escapeRegExpChar(char);
+            }
+        }
+        result += currentSeparator;
+    }
+    return result;
+}
+
+function isMatch(regexp, sample) {
+    if (typeof sample !== 'string') {
+        throw new TypeError("Sample must be a string, but ".concat(typeof sample, " given"));
+    }
+    return regexp.test(sample);
+}
+/**
+ * Compiles one or more glob patterns into a RegExp and returns an isMatch function.
+ * The isMatch function takes a sample string as its only argument and returns `true`
+ * if the string matches the pattern(s).
+ *
+ * ```js
+ * wildcardMatch('src/*.js')('src/index.js') //=> true
+ * ```
+ *
+ * ```js
+ * const isMatch = wildcardMatch('*.example.com', '.')
+ * isMatch('foo.example.com') //=> true
+ * isMatch('foo.bar.com') //=> false
+ * ```
+ */
+function wildcardMatch(pattern, options) {
+    if (typeof pattern !== 'string' && !Array.isArray(pattern)) {
+        throw new TypeError("The first argument must be a single pattern string or an array of patterns, but ".concat(typeof pattern, " given"));
+    }
+    if (typeof options === 'string' || typeof options === 'boolean') {
+        options = { separator: options };
+    }
+    if (arguments.length === 2 &&
+        !(typeof options === 'undefined' ||
+            (typeof options === 'object' && options !== null && !Array.isArray(options)))) {
+        throw new TypeError("The second argument must be an options object or a string/boolean separator, but ".concat(typeof options, " given"));
+    }
+    options = options || {};
+    if (options.separator === '\\') {
+        throw new Error('\\ is not a valid separator because it is used for escaping. Try setting the separator to `true` instead');
+    }
+    var regexpPattern = transform(pattern, options.separator);
+    var regexp = new RegExp("^".concat(regexpPattern, "$"), options.flags);
+    var fn = isMatch.bind(null, regexp);
+    fn.options = options;
+    fn.pattern = pattern;
+    fn.regexp = regexp;
+    return fn;
+}
+
+module.exports = wildcardMatch;
+//# sourceMappingURL=index.js.map
+
 
 /***/ })
 
